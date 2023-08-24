@@ -16,7 +16,7 @@ def read_obj_file(file_path):
 
 
 # Load the OBJ file as a point cloud
-obj_file_path = "meshes/chilli_and_capsicum.obj"
+obj_file_path = "meshes/Chilli and Capsicum.obj"
 point_cloud = read_obj_file(obj_file_path)
 
 # Apply convex hull
