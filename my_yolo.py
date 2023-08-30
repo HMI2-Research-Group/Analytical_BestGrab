@@ -7,7 +7,6 @@ from scripts.project_constants import (
     GO_TO_GRAB_POSITION,
     PANDA_DROP_OBJECTS_JOINTS,
 )
-import rospy
 import torch
 from ultralytics import YOLO
 import sys
@@ -17,7 +16,9 @@ import cv2
 from time import sleep
 
 sys.path.append("/usr/lib/python3/dist-packages/")
+sys.path.append("/opt/ros/noetic/lib/python3/dist-packages")
 from pyrealsense2 import pyrealsense2
+import rospy
 
 
 def main():
