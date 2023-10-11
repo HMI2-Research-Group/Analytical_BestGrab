@@ -1,12 +1,7 @@
 import sys
 from scripts.project_constants import YOLO_CHECKPOINT
 from scripts.panda_moveit_library import FrankaOperator
-from scripts.project_constants import (
-    PANDA_HOME_JOINTS,
-    PANDA_HOME_JOINTS_VISION,
-    GO_TO_GRAB_POSITION,
-    PANDA_DROP_OBJECTS_JOINTS,
-)
+from scripts.project_constants import PANDA_HOME_JOINTS, PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
 import torch
 from ultralytics import YOLO
 import sys
@@ -14,10 +9,7 @@ import numpy as np
 import torch
 import cv2
 from time import sleep
-
-sys.path.append("/usr/lib/python3/dist-packages/")
-sys.path.append("/opt/ros/noetic/lib/python3/dist-packages")
-from pyrealsense2 import pyrealsense2
+import pyrealsense2
 import rospy
 
 
@@ -30,6 +22,7 @@ def main():
     # Intialize the pipeline
     pipeline = pyrealsense2.pipeline()
     config = pyrealsense2.config()
+    config.enable_device(D405_REALSENSE_CAMERA_ID)
     config.enable_stream(pyrealsense2.stream.depth, 640, 480, pyrealsense2.format.z16, 30)
     config.enable_stream(pyrealsense2.stream.color, 640, 480, pyrealsense2.format.bgr8, 30)
     pipeline.start(config)
