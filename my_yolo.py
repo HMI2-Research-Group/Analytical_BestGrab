@@ -85,9 +85,14 @@ def main():
         ]
         # Find the pixel coordinates of the lowest value other than zero in the mask
 
-        highest_pixel = np.where(mask == np.min(mask[np.nonzero(mask)]))
-        # make a big dot on the highest pixel
-        cv2.circle(color_image, (highest_pixel[1][0], highest_pixel[0][0]), 10, (0, 255, 0), -1)
+        # highest_pixel = np.where(mask == np.min(mask[np.nonzero(mask)]))
+        # cv2.circle(color_image, (highest_pixel[1][0], highest_pixel[0][0]), 10, (0, 255, 0), -1)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+        # Find the convex hull for each contour
+        for contour in contours:
+            hull = cv2.convexHull(contour)
+            cv2.drawContours(color_image, [hull], -1, (255, 255, 255), 2)
 
         cv2.imshow("image", color_image)
         # sleep for 1 ms
