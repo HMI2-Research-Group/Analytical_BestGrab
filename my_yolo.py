@@ -1,7 +1,8 @@
 import sys
 from scripts.project_constants import YOLO_CHECKPOINT
-from scripts.panda_moveit_library import FrankaOperator
-from scripts.project_constants import PANDA_HOME_JOINTS, PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
+
+# from scripts.panda_moveit_library import FrankaOperator
+from scripts.project_constants import PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
 import torch
 from ultralytics import YOLO
 import sys
@@ -10,13 +11,14 @@ import torch
 import cv2
 from time import sleep
 import pyrealsense2
-import rospy
+
+# import rospy
 
 
 def main():
-    rospy.init_node("test_yolo", anonymous=True)
-    my_franka_robot = FrankaOperator()
-    my_franka_robot.move_to_pose(PANDA_HOME_JOINTS_VISION)
+    # rospy.init_node("test_yolo", anonymous=True)
+    # my_franka_robot = FrankaOperator()
+    # my_franka_robot.move_to_pose(PANDA_HOME_JOINTS_VISION)
     model = YOLO(YOLO_CHECKPOINT)  # load a pretrained model (recommended for training)
     model.to("cuda")  # optionally change device
     # Intialize the pipeline
@@ -31,7 +33,9 @@ def main():
     while 1:
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
+        depth_frame = frames.get_depth_frame()
         color_image = np.asanyarray(color_frame.get_data())
+        depth_frame = np.asanyarray(depth_frame.get_data())
         # cv2 resize image to 640, 640
         color_image = cv2.resize(color_image, (640, 640))
         # convert color image numpy image to cuda
@@ -60,6 +64,7 @@ def main():
                         2,
                     )
                     # Place the text on top of the bounding box
+                    class_name = result.names[int(result.boxes.cls[i].data)]
                     cv2.putText(
                         color_image,
                         result.names[int(result.boxes.cls[i].data)],
@@ -69,6 +74,21 @@ def main():
                         (0, 255, 0),
                         2,
                     )
+                    if class_name == "Tomato Sauce":
+                        break
+        # mask depth except the bounding box
+        mask = np.zeros_like(depth_frame)
+        mask[
+            round_tensor(bb_box[1]) : round_tensor(bb_box[3]), round_tensor(bb_box[0]) : round_tensor(bb_box[2])
+        ] = depth_frame[
+            round_tensor(bb_box[1]) : round_tensor(bb_box[3]), round_tensor(bb_box[0]) : round_tensor(bb_box[2])
+        ]
+        # Find the pixel coordinates of the lowest value other than zero in the mask
+
+        highest_pixel = np.where(mask == np.min(mask[np.nonzero(mask)]))
+        # make a big dot on the highest pixel
+        cv2.circle(color_image, (highest_pixel[1][0], highest_pixel[0][0]), 10, (0, 255, 0), -1)
+
         cv2.imshow("image", color_image)
         # sleep for 1 ms
         sleep(0.1)
