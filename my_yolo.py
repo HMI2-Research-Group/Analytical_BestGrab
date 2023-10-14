@@ -14,9 +14,10 @@ from scripts.project_constants import PANDA_HOME_JOINTS_VISION, D405_REALSENSE_C
 import rospy
 from geometry_msgs.msg import PointStamped
 import tf
+from collections import defaultdict
 
 
-def transform_point_stamped(x, y, z, target_frame="panda_link0"):
+def transform_point_stamped(x, y, z, target_frame="camera_color_optical_frame"):
     # make a listener
     listener = tf.TransformListener()
     # wait for the transform to be available
@@ -33,13 +34,13 @@ def transform_point_stamped(x, y, z, target_frame="panda_link0"):
         transformed_point.point.x = round(transformed_point.point.x, 2)
         transformed_point.point.y = round(transformed_point.point.y, 2)
         transformed_point.point.z = round(transformed_point.point.z, 2)
-        return transformed_point
+        return transformed_point.point.x, transformed_point.point.y, transformed_point.point.z
     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
         rospy.logerr("Failed to transform point: %s", e)
 
 
 def main():
-    # rospy.init_node("test_yolo", anonymous=True)
+    rospy.init_node("test_yolo", anonymous=True)
     # my_franka_robot = FrankaOperator()
     # my_franka_robot.move_to_pose(PANDA_HOME_JOINTS_VISION)
     model = YOLO(YOLO_CHECKPOINT)  # load a pretrained model (recommended for training)
@@ -118,13 +119,24 @@ def main():
         # Method 2: Find the 3D points of entire bounding box and find the closest point
         # Get the 3D points of the bounding box
         # Get the 3D points of the bounding box
-        bb_box_3d = []
-        for i in range(round_tensor(bb_box[0] * (480.0 / 640.0)), round_tensor(bb_box[1])):
-            for j in range(round_tensor(bb_box[2] * (480.0 / 640.0)), round_tensor(bb_box[3])):
-                pixel_depth = depth_frame.get_distance(i, j)
+        bb_box_3d = defaultdict(list)
+        for i in range(
+            round_tensor(bb_box[0] * (480.0 / 640.0)),
+            round_tensor(bb_box[2] * (480.0 / 640.0)),
+        ):
+            for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
+                pixel_depth = depth_frame.get_distance(j, i)
                 three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
-                bb_box_3d.append(34)
-
+                bb_box_3d[i, j] = transform_point_stamped(*three_d_point)
+        # find the point with highest z value
+        highest_z = 0
+        highest_z_point = None
+        for key, value in bb_box_3d.items():
+            if value[2] > highest_z:
+                highest_z = value[2]
+                highest_z_point = key
+        # Draw the point
+        cv2.circle(color_image, (highest_z_point[0], highest_z_point[1]), 10, (0, 255, 0), -1)
         cv2.imshow("image", color_image)
         # sleep for 1 ms
         sleep(0.1)
