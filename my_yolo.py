@@ -12,6 +12,30 @@ from scripts.project_constants import YOLO_CHECKPOINT
 from scripts.panda_moveit_library import FrankaOperator
 from scripts.project_constants import PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
 import rospy
+from geometry_msgs.msg import PointStamped
+import tf
+
+
+def transform_point_stamped(x, y, z, target_frame="panda_link0"):
+    # make a listener
+    listener = tf.TransformListener()
+    # wait for the transform to be available
+    point_stamped_msg = PointStamped()
+    point_stamped_msg.header.frame_id = "camera_color_optical_frame"
+    point_stamped_msg.point.x = x
+    point_stamped_msg.point.y = y
+    point_stamped_msg.point.z = z
+    listener.waitForTransform(target_frame, point_stamped_msg.header.frame_id, rospy.Time(), rospy.Duration(1.0))
+    # transform the point
+    try:
+        transformed_point = listener.transformPoint(target_frame, point_stamped_msg)
+        # Round off the x, y, z values to 2 decimal places
+        transformed_point.point.x = round(transformed_point.point.x, 2)
+        transformed_point.point.y = round(transformed_point.point.y, 2)
+        transformed_point.point.z = round(transformed_point.point.z, 2)
+        return transformed_point
+    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+        rospy.logerr("Failed to transform point: %s", e)
 
 
 def main():
@@ -38,7 +62,7 @@ def main():
         depth_frame = frames.get_depth_frame()
         depth_intrin = depth_frame.profile.as_video_stream_profile().intrinsics
         color_image = np.asanyarray(color_frame.get_data())
-        depth_frame = np.asanyarray(depth_frame.get_data())
+        depth_frame_np = np.asanyarray(depth_frame.get_data())
         # cv2 resize image to 640, 640
         color_image = cv2.resize(color_image, (640, 640))
         # convert color image numpy image to cuda
@@ -95,9 +119,11 @@ def main():
         # Get the 3D points of the bounding box
         # Get the 3D points of the bounding box
         bb_box_3d = []
-        for i in range(round_tensor(bb_box[0]), round_tensor(bb_box[1] * (480.0 / 640.0))):
-            for j in range(round_tensor(bb_box[2]), round_tensor(bb_box[3] * (480.0 / 640.0))):
-                bb_box_3d.append(pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], depth_frame[j][i]))
+        for i in range(round_tensor(bb_box[0] * (480.0 / 640.0)), round_tensor(bb_box[1])):
+            for j in range(round_tensor(bb_box[2] * (480.0 / 640.0)), round_tensor(bb_box[3])):
+                pixel_depth = depth_frame.get_distance(i, j)
+                three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
+                bb_box_3d.append(34)
 
         cv2.imshow("image", color_image)
         # sleep for 1 ms
