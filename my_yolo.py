@@ -102,7 +102,7 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Mushrooms":
+                    if class_name == "Pasta":
                         break
         # Method 1: Just find the closest point depth from camera (Doesn't work well)
         # # mask depth except the bounding box
@@ -136,7 +136,7 @@ def main():
                 highest_z = value[2]
                 highest_z_point = key
         # Draw the point
-        cv2.circle(color_image, (highest_z_point[0], highest_z_point[1]), 10, (0, 255, 0), -1)
+        cv2.circle(color_image, (int(highest_z_point[0] * 640 / 480), highest_z_point[1]), 10, (0, 255, 0), -1)
         cv2.imshow("image", color_image)
         # sleep for 1 ms
         sleep(0.1)
