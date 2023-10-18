@@ -12,35 +12,41 @@ from scripts.project_constants import YOLO_CHECKPOINT
 from scripts.panda_moveit_library import FrankaOperator
 from scripts.project_constants import PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
 import rospy
-from geometry_msgs.msg import PointStamped
-import tf
+from tf2_geometry_msgs import PointStamped
+import tf2_ros
 from collections import defaultdict
 
 
-def transform_point_stamped(x, y, z, target_frame="camera_color_optical_frame"):
+def transform_point_stamped(x, y, z, tfBuffer, target_frame="panda_link0"):
     # make a listener
-    listener = tf.TransformListener()
+
     # wait for the transform to be available
     point_stamped_msg = PointStamped()
     point_stamped_msg.header.frame_id = "camera_color_optical_frame"
+    point_stamped_msg.header.stamp = rospy.Time(0)
     point_stamped_msg.point.x = x
     point_stamped_msg.point.y = y
     point_stamped_msg.point.z = z
-    listener.waitForTransform(target_frame, point_stamped_msg.header.frame_id, rospy.Time(), rospy.Duration(1.0))
-    # transform the point
-    try:
-        transformed_point = listener.transformPoint(target_frame, point_stamped_msg)
-        # Round off the x, y, z values to 2 decimal places
-        transformed_point.point.x = round(transformed_point.point.x, 2)
-        transformed_point.point.y = round(transformed_point.point.y, 2)
-        transformed_point.point.z = round(transformed_point.point.z, 2)
-        return transformed_point.point.x, transformed_point.point.y, transformed_point.point.z
-    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
-        rospy.logerr("Failed to transform point: %s", e)
+    while not rospy.is_shutdown():
+        try:
+            # now = rospy.Time.now()
+            # listener.waitForTransform(target_frame, point_stamped_msg.header.frame_id, now, rospy.Duration(4.0))
+            transformed_point = tfBuffer.transform(point_stamped_msg, target_frame)
+            # Round off the x, y, z values to 2 decimal places
+            transformed_point.point.x = round(transformed_point.point.x, 2)
+            transformed_point.point.y = round(transformed_point.point.y, 2)
+            transformed_point.point.z = round(transformed_point.point.z, 2)
+            return transformed_point.point.x, transformed_point.point.y, transformed_point.point.z
+        except Exception as e:
+            # rospy.logerr("Failed to transform point: %s", e)
+            sleep(0.1)
+            continue
 
 
 def main():
     rospy.init_node("test_yolo", anonymous=True)
+    tfBuffer = tf2_ros.Buffer()
+    tf2_ros.TransformListener(tfBuffer)
     # my_franka_robot = FrankaOperator()
     # my_franka_robot.move_to_pose(PANDA_HOME_JOINTS_VISION)
     model = YOLO(YOLO_CHECKPOINT)  # load a pretrained model (recommended for training)
@@ -102,7 +108,7 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Pasta":
+                    if class_name == "Chilli":
                         break
         # Method 1: Just find the closest point depth from camera (Doesn't work well)
         # # mask depth except the bounding box
@@ -127,7 +133,7 @@ def main():
             for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
                 pixel_depth = depth_frame.get_distance(j, i)
                 three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
-                bb_box_3d[i, j] = transform_point_stamped(*three_d_point)
+                bb_box_3d[i, j] = transform_point_stamped(*three_d_point, tfBuffer)
         # find the point with highest z value
         highest_z = 0
         highest_z_point = None
@@ -135,11 +141,29 @@ def main():
             if value[2] > highest_z:
                 highest_z = value[2]
                 highest_z_point = key
-        # Draw the point
-        cv2.circle(color_image, (int(highest_z_point[0] * 640 / 480), highest_z_point[1]), 10, (0, 255, 0), -1)
+        # Find all the points which are +- 0.1 of the highest z point
+        # highest_z_points = []
+        # threshold = 0.1
+        # for key, value in bb_box_3d.items():
+        #     if value[2] > highest_z - threshold and value[2] < highest_z + threshold:
+        #         highest_z_points.append(key)
+        # for highest_z_point in highest_z_points:
+        # cv2.circle(color_image, (int(highest_z_point[0] * 640 / 480), highest_z_point[1]), 5, (0, 255, 0), -1)
+        # Find highest z points along each column
+        # for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
+        #     highest_z = 0
+        #     highest_z_point = None
+        #     for i in range(
+        #         round_tensor(bb_box[0] * (480.0 / 640.0)),
+        #         round_tensor(bb_box[2] * (480.0 / 640.0)),
+        #     ):
+        #         pixel_depth = depth_frame.get_distance(j, i)
+        #         three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
+        #         bb_box_3d[i, j] = transform_point_stamped(*three_d_point)
+        cv2.circle(color_image, (int(highest_z_point[0] * 640 / 480), highest_z_point[1]), 5, (0, 255, 0), -1)
         cv2.imshow("image", color_image)
         # sleep for 1 ms
-        sleep(0.1)
+        # sleep(0.01)
         # wait for q key to exit
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
