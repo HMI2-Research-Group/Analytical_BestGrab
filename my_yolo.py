@@ -39,6 +39,7 @@ def transform_point_stamped(x, y, z, tfBuffer, target_frame="panda_link0"):
             return transformed_point.point.x, transformed_point.point.y, transformed_point.point.z
         except Exception as e:
             # rospy.logerr("Failed to transform point: %s", e)
+            print(e)
             sleep(0.1)
             continue
 
@@ -84,6 +85,7 @@ def main():
         # normalize the image
         image_tensor.to("cuda")
         results = model(image_tensor)
+        bb_box = None
         for result in results:
             bb_boxes = result.boxes.xyxy
             # draw the bounding box
@@ -108,63 +110,57 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Chilli":
+                    if class_name == "Tomato Sauce":
                         break
-        # Method 1: Just find the closest point depth from camera (Doesn't work well)
-        # # mask depth except the bounding box
-        # mask = np.zeros_like(depth_frame)
-        # mask[
-        #     round_tensor(bb_box[1]) : round_tensor(bb_box[3]), round_tensor(bb_box[0]) : round_tensor(bb_box[2])
-        # ] = depth_frame[
-        #     round_tensor(bb_box[1]) : round_tensor(bb_box[3]), round_tensor(bb_box[0]) : round_tensor(bb_box[2])
-        # ]
-        # # Find the pixel coordinates of the lowest value other than zero in the mask
+        if bb_box is None:
+            continue
+        method = 1
+        if method == 1:
+            bb_box_3d = defaultdict(list)
+            for i in range(
+                round_tensor(bb_box[0] * (480.0 / 640.0)),
+                round_tensor(bb_box[2] * (480.0 / 640.0)),
+            ):
+                for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
+                    pixel_depth = depth_frame.get_distance(j, i)
+                    three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
+                    bb_box_3d[i, j] = transform_point_stamped(*three_d_point, tfBuffer)
+            # find the point with highest z value
+            highest_z = 0
+            highest_z_point = None
+            for key, value in bb_box_3d.items():
+                if value[2] > highest_z:
+                    highest_z = value[2]
+                    highest_z_point = key
+            cv2.circle(color_image, (int(highest_z_point[0] * 640 / 480), highest_z_point[1]), 5, (0, 255, 0), -1)
 
-        # highest_pixel = np.where(mask == np.min(mask[np.nonzero(mask)]))
-        # cv2.circle(color_image, (highest_pixel[1][0], highest_pixel[0][0]), 10, (0, 255, 0), -1)
-        # Method 2: Find the 3D points of entire bounding box and find the closest point
-        # Get the 3D points of the bounding box
-        # Get the 3D points of the bounding box
-        bb_box_3d = defaultdict(list)
-        for i in range(
-            round_tensor(bb_box[0] * (480.0 / 640.0)),
-            round_tensor(bb_box[2] * (480.0 / 640.0)),
-        ):
+        elif method == 2:
+            bb_box_3d = defaultdict(list)
+            all_pixels = []
+            highest_heights = []
             for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
-                pixel_depth = depth_frame.get_distance(j, i)
-                three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
-                bb_box_3d[i, j] = transform_point_stamped(*three_d_point, tfBuffer)
-        # find the point with highest z value
-        highest_z = 0
-        highest_z_point = None
-        for key, value in bb_box_3d.items():
-            if value[2] > highest_z:
-                highest_z = value[2]
-                highest_z_point = key
-        # Find all the points which are +- 0.1 of the highest z point
-        # highest_z_points = []
-        # threshold = 0.1
-        # for key, value in bb_box_3d.items():
-        #     if value[2] > highest_z - threshold and value[2] < highest_z + threshold:
-        #         highest_z_points.append(key)
-        # for highest_z_point in highest_z_points:
-        # cv2.circle(color_image, (int(highest_z_point[0] * 640 / 480), highest_z_point[1]), 5, (0, 255, 0), -1)
-        # Find highest z points along each column
-        # for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
-        #     highest_z = 0
-        #     highest_z_point = None
-        #     for i in range(
-        #         round_tensor(bb_box[0] * (480.0 / 640.0)),
-        #         round_tensor(bb_box[2] * (480.0 / 640.0)),
-        #     ):
-        #         pixel_depth = depth_frame.get_distance(j, i)
-        #         three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
-        #         bb_box_3d[i, j] = transform_point_stamped(*three_d_point)
-        cv2.circle(color_image, (int(highest_z_point[0] * 640 / 480), highest_z_point[1]), 5, (0, 255, 0), -1)
+                highest_z = 0
+                highest_z_point = None
+                for i in range(
+                    round_tensor(bb_box[0] * (480.0 / 640.0)),
+                    round_tensor(bb_box[2] * (480.0 / 640.0)),
+                ):
+                    pixel_depth = depth_frame.get_distance(j, i)
+                    three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
+                    # bb_box_3d[i, j] = transform_point_stamped(*three_d_point)
+                    if three_d_point[2] > highest_z:
+                        highest_z = three_d_point[2]
+                        highest_z_point = [i, j]
+                if highest_z_point is not None:
+                    all_pixels.append(highest_z_point)
+                    highest_heights.append(highest_z)
+            # For all the points in all_pixels, make a small circle
+            max_height = max(highest_heights)
+            thresh = 1.0
+            for pixel, curr_height in zip(all_pixels, highest_heights):
+                if curr_height >= max_height - thresh:
+                    cv2.circle(color_image, (int(pixel[0] * 640 / 480), pixel[1]), 5, (0, 255, 0), -1)
         cv2.imshow("image", color_image)
-        # sleep for 1 ms
-        # sleep(0.01)
-        # wait for q key to exit
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
