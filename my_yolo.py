@@ -114,7 +114,7 @@ def main():
                         break
         if bb_box is None:
             continue
-        method = 1
+        method = 2
         if method == 1:
             bb_box_3d = defaultdict(list)
             for i in range(
@@ -156,7 +156,7 @@ def main():
                     highest_heights.append(highest_z)
             # For all the points in all_pixels, make a small circle
             max_height = max(highest_heights)
-            thresh = 1.0
+            thresh = 0.001
             for pixel, curr_height in zip(all_pixels, highest_heights):
                 if curr_height >= max_height - thresh:
                     cv2.circle(color_image, (int(pixel[0] * 640 / 480), pixel[1]), 5, (0, 255, 0), -1)
