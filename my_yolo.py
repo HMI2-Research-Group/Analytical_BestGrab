@@ -110,7 +110,7 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Tomato Sauce":
+                    if class_name == "Pasta":
                         break
         if bb_box is None:
             continue
@@ -138,16 +138,18 @@ def main():
             bb_box_3d = defaultdict(list)
             all_pixels = []
             highest_heights = []
-            for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
+            for i in range(
+                round_tensor(bb_box[0] * (480.0 / 640.0)),
+                round_tensor(bb_box[2] * (480.0 / 640.0)),
+            ):
                 highest_z = 0
                 highest_z_point = None
-                for i in range(
-                    round_tensor(bb_box[0] * (480.0 / 640.0)),
-                    round_tensor(bb_box[2] * (480.0 / 640.0)),
-                ):
+                for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
                     pixel_depth = depth_frame.get_distance(j, i)
+                    if pixel_depth == 0.0:
+                        continue
                     three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
-                    # bb_box_3d[i, j] = transform_point_stamped(*three_d_point)
+                    three_d_point = transform_point_stamped(*three_d_point, tfBuffer)
                     if three_d_point[2] > highest_z:
                         highest_z = three_d_point[2]
                         highest_z_point = [i, j]
@@ -155,14 +157,19 @@ def main():
                     all_pixels.append(highest_z_point)
                     highest_heights.append(highest_z)
             # For all the points in all_pixels, make a small circle
+            if len(highest_heights) == 0:
+                continue
             max_height = max(highest_heights)
+            standard_deviation_heights = np.std(np.array(highest_heights))
             thresh = 0.001
             for pixel, curr_height in zip(all_pixels, highest_heights):
                 if curr_height >= max_height - thresh:
+                    # if curr_height == max_height:
                     cv2.circle(color_image, (int(pixel[0] * 640 / 480), pixel[1]), 5, (0, 255, 0), -1)
         cv2.imshow("image", color_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
+        sleep(0.1)
 
 
 if __name__ == "__main__":
