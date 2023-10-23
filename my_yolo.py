@@ -33,9 +33,9 @@ def transform_point_stamped(x, y, z, tfBuffer, target_frame="panda_link0"):
             # listener.waitForTransform(target_frame, point_stamped_msg.header.frame_id, now, rospy.Duration(4.0))
             transformed_point = tfBuffer.transform(point_stamped_msg, target_frame)
             # Round off the x, y, z values to 2 decimal places
-            transformed_point.point.x = round(transformed_point.point.x, 2)
-            transformed_point.point.y = round(transformed_point.point.y, 2)
-            transformed_point.point.z = round(transformed_point.point.z, 2)
+            transformed_point.point.x = round(transformed_point.point.x, 5)
+            transformed_point.point.y = round(transformed_point.point.y, 5)
+            transformed_point.point.z = round(transformed_point.point.z, 5)
             return transformed_point.point.x, transformed_point.point.y, transformed_point.point.z
         except Exception as e:
             # rospy.logerr("Failed to transform point: %s", e)
@@ -124,7 +124,8 @@ def main():
                 for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
                     pixel_depth = depth_frame.get_distance(j, i)
                     three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
-                    bb_box_3d[i, j] = transform_point_stamped(*three_d_point, tfBuffer)
+                    # bb_box_3d[i, j] = transform_point_stamped(*three_d_point, tfBuffer)
+                    bb_box_3d[i, j] = three_d_point
             # find the point with highest z value
             highest_z = 0
             highest_z_point = None
@@ -161,10 +162,10 @@ def main():
                 continue
             max_height = max(highest_heights)
             standard_deviation_heights = np.std(np.array(highest_heights))
+            print("Standard deviation of heights: ", standard_deviation_heights)
             thresh = 0.001
             for pixel, curr_height in zip(all_pixels, highest_heights):
                 if curr_height >= max_height - thresh:
-                    # if curr_height == max_height:
                     cv2.circle(color_image, (int(pixel[0] * 640 / 480), pixel[1]), 5, (0, 255, 0), -1)
         cv2.imshow("image", color_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
