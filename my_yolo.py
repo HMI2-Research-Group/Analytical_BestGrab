@@ -33,9 +33,10 @@ def transform_point_stamped(x, y, z, tfBuffer, target_frame="panda_link0"):
             # listener.waitForTransform(target_frame, point_stamped_msg.header.frame_id, now, rospy.Duration(4.0))
             transformed_point = tfBuffer.transform(point_stamped_msg, target_frame)
             # Round off the x, y, z values to 2 decimal places
-            transformed_point.point.x = round(transformed_point.point.x, 5)
-            transformed_point.point.y = round(transformed_point.point.y, 5)
-            transformed_point.point.z = round(transformed_point.point.z, 5)
+            round_off_decimals = 2
+            transformed_point.point.x = round(transformed_point.point.x, round_off_decimals)
+            transformed_point.point.y = round(transformed_point.point.y, round_off_decimals)
+            transformed_point.point.z = round(transformed_point.point.z, round_off_decimals)
             return transformed_point.point.x, transformed_point.point.y, transformed_point.point.z
         except Exception as e:
             # rospy.logerr("Failed to transform point: %s", e)
@@ -110,7 +111,7 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Pasta":
+                    if class_name == "Tomato Sauce":
                         break
         if bb_box is None:
             continue
