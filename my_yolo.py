@@ -6,6 +6,7 @@ import cv2
 from time import sleep
 import pyrealsense2
 import sys
+import time
 
 sys.path.append("/usr/lib/python3/dist-packages")  # For rospkg dependency
 from scripts.project_constants import YOLO_CHECKPOINT
@@ -63,7 +64,8 @@ def main():
     pipeline.start(config)
     # write a one line function to round the tensor to nearest integer
     round_tensor = lambda x: round(float(x.data))
-    while 1:
+    start_time = time.time()
+    while time.time() - start_time < 5:
         frames = pipeline.wait_for_frames()
         # align the depth and color frames
         frames = align.process(frames)
@@ -85,7 +87,8 @@ def main():
         # image_tensor = torch.rand(1, 3, 640, 640, dtype=torch.float32)
         # normalize the image
         image_tensor.to("cuda")
-        results = model(image_tensor)
+        with torch.no_grad():
+            results = model(image_tensor)
         bb_box = None
         for result in results:
             bb_boxes = result.boxes.xyxy
@@ -111,11 +114,11 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Tomato Sauce":
+                    if class_name == "Pasta":
                         break
         if bb_box is None:
             continue
-        method = 2
+        method = 3
         if method == 1:
             bb_box_3d = defaultdict(list)
             for i in range(
@@ -168,6 +171,41 @@ def main():
             for pixel, curr_height in zip(all_pixels, highest_heights):
                 if curr_height >= max_height - thresh:
                     cv2.circle(color_image, (int(pixel[0] * 640 / 480), pixel[1]), 5, (0, 255, 0), -1)
+
+        # Maria's Method
+        elif method == 3:
+            bb_box_3d = defaultdict(list)
+            all_pixels = []
+            highest_heights = []
+            for i in range(
+                round_tensor(bb_box[0] * (480.0 / 640.0)),
+                round_tensor(bb_box[2] * (480.0 / 640.0)),
+            ):
+                highest_z = 0
+                highest_z_point = None
+                for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
+                    pixel_depth = depth_frame.get_distance(j, i)
+                    if pixel_depth == 0.0:
+                        continue
+                    three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
+                    three_d_point = transform_point_stamped(*three_d_point, tfBuffer)
+                    if three_d_point[2] > highest_z:
+                        highest_z = three_d_point[2]
+                        highest_z_point = [i, j]
+                if highest_z_point is not None:
+                    all_pixels.append(highest_z_point)
+                    highest_heights.append(highest_z)
+            # For all the points in all_pixels, make a small circle
+            if len(highest_heights) == 0:
+                continue
+            max_height = max(highest_heights)
+            standard_deviation_heights = np.std(np.array(highest_heights))
+            print("Standard deviation of heights: ", standard_deviation_heights)
+            thresh = 0.001
+            for pixel, curr_height in zip(all_pixels, highest_heights):
+                if curr_height >= max_height - thresh:
+                    cv2.circle(color_image, (int(pixel[0] * 640 / 480), pixel[1]), 5, (0, 255, 0), -1)
+
         cv2.imshow("image", color_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
