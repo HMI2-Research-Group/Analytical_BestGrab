@@ -46,6 +46,19 @@ def transform_point_stamped(x, y, z, tfBuffer, target_frame="panda_link0"):
             continue
 
 
+def perpendicular_distance(point: list, line_points: list) -> float:
+    x1, y1 = line_points[0]
+    x2, y2 = line_points[1]
+
+    A = y1 - y2
+    B = x2 - x1
+    C = x1 * y2 - x2 * y1
+
+    x0, y0 = point
+    distance = np.abs(A * x0 + B * y0 + C) / np.sqrt(A**2 + B**2)
+    return distance
+
+
 def main():
     rospy.init_node("test_yolo", anonymous=True)
     tfBuffer = tf2_ros.Buffer()
@@ -114,7 +127,7 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Pasta":
+                    if class_name == "Tomato Sauce":
                         break
         if bb_box is None:
             continue
@@ -184,7 +197,10 @@ def main():
                 highest_z = 0
                 highest_z_point = None
                 for j in range(round_tensor(bb_box[1]), round_tensor(bb_box[3])):
-                    pixel_depth = depth_frame.get_distance(j, i)
+                    try:
+                        pixel_depth = depth_frame.get_distance(j, i)
+                    except:
+                        continue
                     if pixel_depth == 0.0:
                         continue
                     three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
@@ -202,14 +218,26 @@ def main():
             standard_deviation_heights = np.std(np.array(highest_heights))
             print("Standard deviation of heights: ", standard_deviation_heights)
             thresh = 0.001
+            max_dist_from_center = 0
+            best_pixel = None
+            line_points = [
+                [float((bb_box[0] + bb_box[2] / 2) * (480 / 640)), float(bb_box[1])],
+                [float((bb_box[0] + bb_box[2] / 2) * (480 / 640)), float(bb_box[3])],
+            ]
             for pixel, curr_height in zip(all_pixels, highest_heights):
                 if curr_height >= max_height - thresh:
-                    cv2.circle(color_image, (int(pixel[0] * 640 / 480), pixel[1]), 5, (0, 255, 0), -1)
+                    dist_from_center = perpendicular_distance(pixel, line_points)
+                    if dist_from_center > max_dist_from_center:
+                        max_dist_from_center = dist_from_center
+                        best_pixel = pixel
+            if best_pixel is not None:
+                cv2.circle(color_image, (int(best_pixel[0] * 640 / 480), best_pixel[1]), 5, (0, 255, 0), -1)
 
         cv2.imshow("image", color_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
         sleep(0.1)
+    input("Press Enter to find a different best pickup point")
 
 
 if __name__ == "__main__":
