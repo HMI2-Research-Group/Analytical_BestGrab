@@ -127,7 +127,7 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Tomato Sauce":
+                    if class_name == "Garlic":
                         break
         if bb_box is None:
             continue
@@ -215,8 +215,6 @@ def main():
             if len(highest_heights) == 0:
                 continue
             max_height = max(highest_heights)
-            standard_deviation_heights = np.std(np.array(highest_heights))
-            print("Standard deviation of heights: ", standard_deviation_heights)
             thresh = 0.001
             max_dist_from_center = 0
             best_pixel = None
@@ -224,14 +222,24 @@ def main():
                 [float((bb_box[0] + bb_box[2] / 2) * (480 / 640)), float(bb_box[1])],
                 [float((bb_box[0] + bb_box[2] / 2) * (480 / 640)), float(bb_box[3])],
             ]
+            interesting_pixels = []
             for pixel, curr_height in zip(all_pixels, highest_heights):
                 if curr_height >= max_height - thresh:
+                    interesting_pixels.append(pixel)
                     dist_from_center = perpendicular_distance(pixel, line_points)
                     if dist_from_center > max_dist_from_center:
                         max_dist_from_center = dist_from_center
                         best_pixel = pixel
             if best_pixel is not None:
-                cv2.circle(color_image, (int(best_pixel[0] * 640 / 480), best_pixel[1]), 5, (0, 255, 0), -1)
+                # In the interesting pixels, find the four closest pixels to the best pixel
+                closest_pixels = []
+                for pixel in interesting_pixels:
+                    dist = np.linalg.norm(np.array(pixel) - np.array(best_pixel))
+                    closest_pixels.append([pixel, dist])
+                closest_pixels.sort(key=lambda x: x[1])
+                closest_pixels = closest_pixels[:4]
+                for each_pixel in closest_pixels:
+                    cv2.circle(color_image, (int(each_pixel[0][0] * 640 / 480), each_pixel[0][1]), 5, (0, 255, 0), -1)
 
         cv2.imshow("image", color_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
