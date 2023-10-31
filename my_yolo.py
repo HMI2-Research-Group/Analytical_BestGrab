@@ -7,6 +7,8 @@ from time import sleep
 import pyrealsense2
 import sys
 import time
+import math
+from matplotlib import pyplot as plt
 
 sys.path.append("/usr/lib/python3/dist-packages")  # For rospkg dependency
 from scripts.project_constants import YOLO_CHECKPOINT
@@ -34,7 +36,7 @@ def transform_point_stamped(x, y, z, tfBuffer, target_frame="panda_link0"):
             # listener.waitForTransform(target_frame, point_stamped_msg.header.frame_id, now, rospy.Duration(4.0))
             transformed_point = tfBuffer.transform(point_stamped_msg, target_frame)
             # Round off the x, y, z values to 2 decimal places
-            round_off_decimals = 2
+            round_off_decimals = 3
             transformed_point.point.x = round(transformed_point.point.x, round_off_decimals)
             transformed_point.point.y = round(transformed_point.point.y, round_off_decimals)
             transformed_point.point.z = round(transformed_point.point.z, round_off_decimals)
@@ -57,6 +59,29 @@ def perpendicular_distance(point: list, line_points: list) -> float:
     x0, y0 = point
     distance = np.abs(A * x0 + B * y0 + C) / np.sqrt(A**2 + B**2)
     return distance
+
+
+def find_gripper_angle(all_points, best_point):
+    all_x = [best_point[0]]
+    all_y = [best_point[1]]
+    for point in all_points:
+        all_x.append(point[0])
+        all_y.append(point[1])
+    x = np.array(all_x)
+    y = np.array(all_y)
+    A = np.vstack([x**2, x, np.ones_like(x)]).T
+    coefficients = np.linalg.lstsq(A, y, rcond=None)[0]
+    a, b, c = coefficients
+    gripper_angle = math.degrees(math.atan(-1 / (2 * a * best_point[0] + b)))
+    print("Gripper angle: ", gripper_angle)
+    # Plot the points
+    plt.clf()
+    plt.scatter(all_x, all_y)
+    # Draw a line along best point and gripper angle
+    plt.plot(
+        [best_point[0], best_point[0] + 0.1 * math.cos(math.radians(gripper_angle))],
+        [best_point[1], best_point[1] + 0.1 * math.sin(math.radians(gripper_angle))],
+    )
 
 
 def main():
@@ -205,6 +230,7 @@ def main():
                         continue
                     three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(depth_intrin, [i, j], pixel_depth)
                     three_d_point = transform_point_stamped(*three_d_point, tfBuffer)
+                    bb_box_3d[i, j] = three_d_point
                     if three_d_point[2] > highest_z:
                         highest_z = three_d_point[2]
                         highest_z_point = [i, j]
@@ -234,17 +260,26 @@ def main():
                 # In the interesting pixels, find the four closest pixels to the best pixel
                 closest_pixels = []
                 for pixel in interesting_pixels:
-                    dist = np.linalg.norm(np.array(pixel) - np.array(best_pixel))
+                    dist = np.linalg.norm(
+                        np.array(bb_box_3d[pixel[0], pixel[1]]) - np.array(bb_box_3d[best_pixel[0], best_pixel[1]])
+                    )
                     closest_pixels.append([pixel, dist])
+                closest_pixels = [pixel for pixel in closest_pixels if pixel[1] > 0.0]
                 closest_pixels.sort(key=lambda x: x[1])
                 closest_pixels = closest_pixels[:4]
-                for each_pixel in closest_pixels:
-                    cv2.circle(color_image, (int(each_pixel[0][0] * 640 / 480), each_pixel[0][1]), 5, (0, 255, 0), -1)
+                # for each_pixel in closest_pixels:
+                #     cv2.circle(color_image, (int(each_pixel[0][0] * 640 / 480), each_pixel[0][1]), 5, (0, 255, 0), -1)
+                cv2.circle(color_image, (int(best_pixel[0] * 640 / 480), best_pixel[1]), 5, (0, 255, 0), -1)
+                find_gripper_angle(
+                    [bb_box_3d[pixel[0][0], pixel[0][1]] for pixel in closest_pixels],
+                    bb_box_3d[best_pixel[0], best_pixel[1]],
+                )
 
         cv2.imshow("image", color_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
-        sleep(0.1)
+        sleep(0.01)
+    plt.show()
     input("Press Enter to find a different best pickup point")
 
 
