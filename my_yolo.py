@@ -72,12 +72,17 @@ def find_gripper_angle(all_points, best_point):
     A = np.vstack([x**2, x, np.ones_like(x)]).T
     coefficients = np.linalg.lstsq(A, y, rcond=None)[0]
     a, b, c = coefficients
+    # Plot the quadratic curve
+    x = np.linspace(int(min(all_x) - 1), 0.1, int(max(all_x) + 1))
+    y = a * x**2 + b * x + c
+    plt.clf()
+    plt.plot(x, y)
     gripper_angle = math.degrees(math.atan(-1 / (2 * a * best_point[0] + b)))
     # if gripper_angle < 0:
     #     gripper_angle += 90
     print("Gripper angle: ", gripper_angle)
     # Plot the points
-    plt.clf()
+
     plt.scatter(all_x, all_y)
     # Draw a line along best point and gripper angle
     plt.plot(
@@ -154,8 +159,10 @@ def main():
                         (0, 255, 0),
                         2,
                     )
-                    if class_name == "Garlic":
+                    if class_name == "Mushrooms":
                         break
+                    else:
+                        bb_box = None
         if bb_box is None:
             continue
         method = 3
@@ -243,7 +250,7 @@ def main():
             if len(highest_heights) == 0:
                 continue
             max_height = max(highest_heights)
-            thresh = 0.001
+            thresh = 0.01
             max_dist_from_center = 0
             best_pixel = None
             line_points = [
@@ -278,8 +285,9 @@ def main():
         cv2.imshow("image", color_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
-        sleep(0.01)
+        sleep(0.1)
     plt.show()
+    pipeline.stop()
 
 
 if __name__ == "__main__":
