@@ -73,6 +73,8 @@ def find_gripper_angle(all_points, best_point):
     coefficients = np.linalg.lstsq(A, y, rcond=None)[0]
     a, b, c = coefficients
     gripper_angle = math.degrees(math.atan(-1 / (2 * a * best_point[0] + b)))
+    # if gripper_angle < 0:
+    #     gripper_angle += 90
     print("Gripper angle: ", gripper_angle)
     # Plot the points
     plt.clf()
@@ -103,7 +105,7 @@ def main():
     # write a one line function to round the tensor to nearest integer
     round_tensor = lambda x: round(float(x.data))
     start_time = time.time()
-    while time.time() - start_time < 5:
+    while time.time() - start_time < 10:
         frames = pipeline.wait_for_frames()
         # align the depth and color frames
         frames = align.process(frames)
@@ -260,9 +262,7 @@ def main():
                 # In the interesting pixels, find the four closest pixels to the best pixel
                 closest_pixels = []
                 for pixel in interesting_pixels:
-                    dist = np.linalg.norm(
-                        np.array(bb_box_3d[pixel[0], pixel[1]]) - np.array(bb_box_3d[best_pixel[0], best_pixel[1]])
-                    )
+                    dist = np.linalg.norm(np.array([pixel[0], pixel[1]]) - np.array([best_pixel[0], best_pixel[1]]))
                     closest_pixels.append([pixel, dist])
                 closest_pixels = [pixel for pixel in closest_pixels if pixel[1] > 0.0]
                 closest_pixels.sort(key=lambda x: x[1])
@@ -280,7 +280,6 @@ def main():
             break
         sleep(0.01)
     plt.show()
-    input("Press Enter to find a different best pickup point")
 
 
 if __name__ == "__main__":
