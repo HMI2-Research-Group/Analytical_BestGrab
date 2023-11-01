@@ -83,6 +83,18 @@ class FrankaOperator:
         if execution_status.status.text == "CONTROL_FAILED":
             print("\033[91m" + f"Panda Hit object, Please fix the errors" + "\033[0m")
 
+    def rotate_gripper_to_default(self):
+        joint_goal = self.move_group.get_current_joint_values()
+        joint_goal[-1] = 0.726
+        self.move_group.go(joint_goal, wait=True)
+
+    def rotate_gripper(self, angle):
+        # Convert degrees to radians
+        angle = angle * pi / 180
+        joint_goal = self.move_group.get_current_joint_values()
+        joint_goal[-1] += angle
+        self.move_group.go(joint_goal, wait=True)
+
     @multimethod
     def move_to_pose(self, target_pose: geometry_msgs.msg.PoseStamped) -> bool:
         waypoints = []
