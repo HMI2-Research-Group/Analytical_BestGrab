@@ -3,7 +3,7 @@ import sys
 sys.path.append("/usr/lib/python3/dist-packages")
 import rospy
 from scripts.panda_moveit_library import FrankaOperator
-from scripts.project_constants import PANDA_HOME_JOINTS_VISION
+from scripts.project_constants import PANDA_HOME_JOINTS, PANDA_HOME_JOINTS_VISION
 
 if __name__ == "__main__":
     rospy.init_node("reset_robot", anonymous=True)

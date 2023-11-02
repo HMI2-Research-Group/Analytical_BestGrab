@@ -68,7 +68,7 @@ class FrankaOperator:
         client = actionlib.SimpleActionClient("/franka_gripper/move", franka_gripper.msg.MoveAction)
         client.wait_for_server()
         goal = franka_gripper.msg.MoveGoal()
-        goal.width = 0.08
+        goal.width = 0.05
         goal.speed = 0.08
         client.send_goal(goal)
         client.wait_for_result()
@@ -87,6 +87,11 @@ class FrankaOperator:
         joint_goal = self.move_group.get_current_joint_values()
         joint_goal[-1] = 0.726
         self.move_group.go(joint_goal, wait=True)
+
+    def face_gripper_down(self):
+        joint_goal = self.move_group.get_current_joint_values()
+        joint_goal[-2] -= 0.05
+        self.move_to_pose(joint_goal)
 
     def rotate_gripper(self, angle):
         # Convert degrees to radians

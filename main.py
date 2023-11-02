@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 sys.path.append("/usr/lib/python3/dist-packages")
 from scripts.project_constants import YOLO_CHECKPOINT
 from scripts.panda_moveit_library import FrankaOperator
-from scripts.project_constants import PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
+from scripts.project_constants import PANDA_HOME_JOINTS, PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
 import rospy
 from tf2_geometry_msgs import PointStamped, PoseStamped
 import tf2_ros
@@ -33,16 +33,13 @@ def transform_point_to_posestamped(x, y, z, tfBuffer, target_frame="panda_EE"):
     point_stamped_msg.point.z = z
     while not rospy.is_shutdown():
         try:
-            # now = rospy.Time.now()
-            # listener.waitForTransform(target_frame, point_stamped_msg.header.frame_id, now, rospy.Duration(4.0))
             transformed_point = tfBuffer.transform(point_stamped_msg, target_frame)
-            # Round off the x, y, z values to 2 decimal places
-            # transformed_point = tfBuffer.transform(transformed_point, "panda_EE")
             my_point_stamped = PoseStamped()
             my_point_stamped.pose.position.x = transformed_point.point.x
             my_point_stamped.pose.position.y = transformed_point.point.y
             my_point_stamped.pose.position.z = transformed_point.point.z
-            my_point_stamped.header.frame_id = "panda_EE"
+            my_point_stamped.header.frame_id = target_frame
+
             return my_point_stamped
         except Exception as e:
             # rospy.logerr("Failed to transform point: %s", e)
@@ -128,7 +125,7 @@ class YOLODetector:
         config.enable_stream(pyrealsense2.stream.color, 640, 480, pyrealsense2.format.bgr8, 30)
         self.pipeline.start(config)
         self.align = pyrealsense2.align(pyrealsense2.stream.color)
-        self.interested_object = "Garlic"
+        self.interested_object = "Cheese"
         self.my_franka = FrankaOperator()
 
     def detect(self):
@@ -254,15 +251,16 @@ class YOLODetector:
             ),
             self.tfBuffer,
         )
-        # tf_stamped.pose.position.z -= 0.05
+
         self.my_franka.move_to_pose(tf_stamped)
-        # Now rotate the gripper
         self.my_franka.rotate_gripper(my_angle)
+        self.my_franka.lift_object(0.05)
+        self.my_franka.face_gripper_down()
+
+        # The Franka is positioned properly, now go down and close the gripper
+        self.my_franka.lift_object(-0.05)
         self.my_franka.close_gripper()
-        # Now move the gripper down
-        # tf_stamped.pose.position.z += 0.06
-        # self.my_franka.move_to_pose(tf_stamped)
-        self.my_franka.move_to_pose(PANDA_HOME_JOINTS_VISION)
+        self.my_franka.move_to_pose(PANDA_HOME_JOINTS)
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         start_time = time.time()
