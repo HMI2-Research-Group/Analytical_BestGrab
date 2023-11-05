@@ -14,7 +14,11 @@ from matplotlib import pyplot as plt
 sys.path.append("/usr/lib/python3/dist-packages")
 from scripts.project_constants import YOLO_CHECKPOINT
 from scripts.panda_moveit_library import FrankaOperator
-from scripts.project_constants import PANDA_HOME_JOINTS, PANDA_HOME_JOINTS_VISION, D405_REALSENSE_CAMERA_ID
+from scripts.project_constants import (
+    PANDA_HOME_JOINTS,
+    PANDA_HOME_JOINTS_VISION,
+    D405_REALSENSE_CAMERA_ID,
+)
 import rospy
 from tf2_geometry_msgs import PointStamped, PoseStamped
 import tf2_ros
@@ -65,10 +69,20 @@ def transform_point_stamped(x, y, z, tfBuffer, target_frame="panda_link0"):
             transformed_point = tfBuffer.transform(point_stamped_msg, target_frame)
             # Round off the x, y, z values to 2 decimal places
             round_off_decimals = 3
-            transformed_point.point.x = round(transformed_point.point.x, round_off_decimals)
-            transformed_point.point.y = round(transformed_point.point.y, round_off_decimals)
-            transformed_point.point.z = round(transformed_point.point.z, round_off_decimals)
-            return transformed_point.point.x, transformed_point.point.y, transformed_point.point.z
+            transformed_point.point.x = round(
+                transformed_point.point.x, round_off_decimals
+            )
+            transformed_point.point.y = round(
+                transformed_point.point.y, round_off_decimals
+            )
+            transformed_point.point.z = round(
+                transformed_point.point.z, round_off_decimals
+            )
+            return (
+                transformed_point.point.x,
+                transformed_point.point.y,
+                transformed_point.point.z,
+            )
         except Exception as e:
             # rospy.logerr("Failed to transform point: %s", e)
             print(e)
@@ -116,13 +130,19 @@ class YOLODetector:
     def __init__(self):
         self.tfBuffer = tf2_ros.Buffer()
         tf2_ros.TransformListener(self.tfBuffer)
-        self.model = YOLO(YOLO_CHECKPOINT)  # load a pretrained model (recommended for training)
+        self.model = YOLO(
+            YOLO_CHECKPOINT
+        )  # load a pretrained model (recommended for training)
         self.model.to("cuda")
         self.pipeline = pyrealsense2.pipeline()
         config = pyrealsense2.config()
         config.enable_device(D405_REALSENSE_CAMERA_ID)
-        config.enable_stream(pyrealsense2.stream.depth, 640, 480, pyrealsense2.format.z16, 30)
-        config.enable_stream(pyrealsense2.stream.color, 640, 480, pyrealsense2.format.bgr8, 30)
+        config.enable_stream(
+            pyrealsense2.stream.depth, 640, 480, pyrealsense2.format.z16, 30
+        )
+        config.enable_stream(
+            pyrealsense2.stream.color, 640, 480, pyrealsense2.format.bgr8, 30
+        )
         self.pipeline.start(config)
         self.align = pyrealsense2.align(pyrealsense2.stream.color)
         self.interested_object = "Cheese"
@@ -134,7 +154,9 @@ class YOLODetector:
         frames = self.align.process(frames)
         self.color_frame = frames.get_color_frame()
         self.depth_frame = frames.get_depth_frame()
-        self.depth_intrin = self.depth_frame.profile.as_video_stream_profile().intrinsics
+        self.depth_intrin = (
+            self.depth_frame.profile.as_video_stream_profile().intrinsics
+        )
         self.color_image = np.asanyarray(self.color_frame.get_data())
         self.color_image_resized = cv2.resize(self.color_image, (640, 640))
         # convert color image numpy image to cuda
@@ -198,7 +220,9 @@ class YOLODetector:
                     continue
                 if pixel_depth == 0.0:
                     continue
-                three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(self.depth_intrin, [i, j], pixel_depth)
+                three_d_point = pyrealsense2.rs2_deproject_pixel_to_point(
+                    self.depth_intrin, [i, j], pixel_depth
+                )
                 three_d_point = transform_point_stamped(*three_d_point, self.tfBuffer)
                 bb_box_3d[i, j] = three_d_point
                 if three_d_point[2] > highest_z:
@@ -230,14 +254,19 @@ class YOLODetector:
             # In the interesting pixels, find the four closest pixels to the best pixel
             closest_pixels = []
             for pixel in interesting_pixels:
-                dist = np.linalg.norm(np.array([pixel[0], pixel[1]]) - np.array([best_pixel[0], best_pixel[1]]))
+                dist = np.linalg.norm(
+                    np.array([pixel[0], pixel[1]])
+                    - np.array([best_pixel[0], best_pixel[1]])
+                )
                 closest_pixels.append([pixel, dist])
             closest_pixels = [pixel for pixel in closest_pixels if pixel[1] > 0.0]
             closest_pixels.sort(key=lambda x: x[1])
             closest_pixels = closest_pixels[:4]
             # for each_pixel in closest_pixels:
             #     cv2.circle(color_image, (int(each_pixel[0][0] * 640 / 480), each_pixel[0][1]), 5, (0, 255, 0), -1)
-            cv2.circle(self.color_image, (best_pixel[0], best_pixel[1]), 5, (0, 255, 0), -1)
+            cv2.circle(
+                self.color_image, (best_pixel[0], best_pixel[1]), 5, (0, 255, 0), -1
+            )
             my_angle = find_gripper_angle(
                 [bb_box_3d[pixel[0][0], pixel[0][1]] for pixel in closest_pixels],
                 bb_box_3d[best_pixel[0], best_pixel[1]],
@@ -247,7 +276,9 @@ class YOLODetector:
     def pick_object(self, best_pixel, my_angle):
         tf_stamped = transform_point_to_posestamped(
             *pyrealsense2.rs2_deproject_pixel_to_point(
-                self.depth_intrin, best_pixel, self.depth_frame.get_distance(*best_pixel)
+                self.depth_intrin,
+                best_pixel,
+                self.depth_frame.get_distance(*best_pixel),
             ),
             self.tfBuffer,
         )
